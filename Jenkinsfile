@@ -1,17 +1,22 @@
 pipeline {
     agent any
 
-    environment {
-        // Optional: Specify Gradle home if necessary
-        GRADLE_HOME = '/path/to/gradle'
-    }
-
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Build') {
             steps {
                 script {
-                    // Build the project using Gradle wrapper
-                    sh './gradlew assemble'
+                    // Replace nohup with an alternative for Windows
+                    if (isUnix()) {
+                        sh 'nohup ./build.sh &'
+                    } else {
+                        bat 'start /B build.bat'
+                    }
                 }
             }
         }
@@ -19,33 +24,31 @@ pipeline {
         stage('Test') {
             steps {
                 script {
-                    // Run the tests using Gradle wrapper
-                    sh './gradlew test'
+                    if (isUnix()) {
+                        sh './run_tests.sh'
+                    } else {
+                        bat 'run_tests.bat'
+                    }
                 }
             }
         }
 
         stage('Archive Test Results') {
             steps {
-                // Archive test results in XML format, adjust path if necessary
-                archiveArtifacts allowEmptyArchive: true, artifacts: '**/build/test-results/test/*.xml', onlyIfSuccessful: true
-                junit '**/build/test-results/test/*.xml' // Optional: To publish test results in Jenkins
+                junit '**/target/test-*.xml'  // Adjust the test results path as needed
+            }
+        }
+
+        stage('Post Actions') {
+            steps {
+                cleanWs()  // Clean workspace after build
             }
         }
     }
 
     post {
-        always {
-            // Clean workspace after the build/test
-            cleanWs()
-        }
-        success {
-            // Optional: Success message
-            echo "Build and tests passed successfully!"
-        }
         failure {
-            // Optional: Failure message
-            echo "Build or tests failed!"
+            echo 'Build or tests failed!'
         }
     }
 }
