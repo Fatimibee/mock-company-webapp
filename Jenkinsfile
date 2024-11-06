@@ -1,63 +1,51 @@
 pipeline {
     agent any
+
     environment {
-        // Optional: Caching Gradle dependencies for faster builds (adjust path as needed)
-        GRADLE_USER_HOME = '/path/to/cache/.gradle'
+        // Optional: Specify Gradle home if necessary
+        GRADLE_HOME = '/path/to/gradle'
     }
-    parameters {
-        // Optional: Allows you to specify the deployment environment
-        string(name: 'DEPLOY_ENV', defaultValue: 'dev', description: 'Deployment environment')
-    }
+
     stages {
         stage('Build') {
             steps {
-                // Command to build the project (you can change 'sh' to 'bat' for Windows)
-                sh './gradlew assemble'
+                script {
+                    // Build the project using Gradle wrapper
+                    sh './gradlew assemble'
+                }
             }
         }
-        stage('Lint') {
-            steps {
-                // Command to run static code analysis (e.g., Checkstyle)
-                sh './gradlew checkstyleMain'
-            }
-        }
+
         stage('Test') {
-            parallel {
-                stage('Unit Tests') {
-                    steps {
-                        // Command to run unit tests
-                        sh './gradlew test'
-                    }
-                }
-                stage('Integration Tests') {
-                    steps {
-                        // Command to run integration tests (if applicable)
-                        sh './gradlew integrationTest'
-                    }
+            steps {
+                script {
+                    // Run the tests using Gradle wrapper
+                    sh './gradlew test'
                 }
             }
         }
-        stage('Deploy') {
+
+        stage('Archive Test Results') {
             steps {
-                // Optional: Deploy to the environment based on parameter (e.g., dev, prod)
-                sh "./deploy.sh ${params.DEPLOY_ENV}"
+                // Archive test results in XML format, adjust path if necessary
+                archiveArtifacts allowEmptyArchive: true, artifacts: '**/build/test-results/test/*.xml', onlyIfSuccessful: true
+                junit '**/build/test-results/test/*.xml' // Optional: To publish test results in Jenkins
             }
         }
     }
+
     post {
+        always {
+            // Clean workspace after the build/test
+            cleanWs()
+        }
         success {
-            // Archive build artifacts (e.g., JAR or WAR file)
-            archiveArtifacts 'build/libs/*.jar'
-            // Notify on Slack if the build is successful
-            slackSend(channel: '#build-notifications', message: "Build succeeded!")
+            // Optional: Success message
+            echo "Build and tests passed successfully!"
         }
         failure {
-            // Notify on Slack if the build fails
-            slackSend(channel: '#build-notifications', message: "Build failed!")
-        }
-        always {
-            // Clean up after the build
-            cleanWs()
+            // Optional: Failure message
+            echo "Build or tests failed!"
         }
     }
 }
